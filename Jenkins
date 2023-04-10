@@ -1,22 +1,89 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage ('Print') {
-            steps {
-                echo "Hello Devops Engineers"
+  parameters {
+    choice(
+      choices: ['EC2', 'VPC'],
+      description: 'Select the deployment type',
+      name: 'DEPLOYMENT_TYPE'
+    )
+  }
+
+  stages {
+    stage('Deploy') {
+      steps {
+        script {
+          if (params.DEPLOYMENT_TYPE == 'EC2') {
+            node {
+              def instanceTypeList = 't2.micro,t2.small,t2.medium'.split(',')
+              def instanceType = input(
+                message: 'Select an Instance Type:',
+                parameters: [choice(choices: instanceTypeList, description: '')]
+              )
+
+              def regionList = 'us-east-1,us-east-2,us-west-1'.split(',')
+              def region = input(
+                message: 'Select a region:',
+                parameters: [choice(choices: regionList, description: '')]
+              )
+
+              def associatedpublicip = 'TRUE,FALSE'.split(',')
+              def publicip = input(
+                message: 'Select true or false:',
+                parameters: [choice(choices: associatedpublicip, description: '')]
+              )
+
+              def amiList = 'ami-06e46074ae430fba6,ami-0fa1de1d60de6a97e'.split(',')
+              def ami = input(
+                message: 'Select the required AMI:',
+                parameters: [choice(choices: amiList, description: '')]
+              )
+
+              def subnetIdList = 'subnet-0fcb9f9e9221a64eb,subnet-0d8a258fb8f133c31'.split(',')
+              def subnetId = input(
+                message: 'Select the required subnet ID:',
+                parameters: [choice(choices: subnetIdList, description: '')]
+              )
+
+              ec2 {
+                ami: ami,
+                instanceType: instanceType,
+                securityGroups: 'default',
+                keyPair: 'my-key-pair',
+                region: region,
+                subnetId: subnetId,
+                associatePublicIp: publicip,
+                tags: [
+                  Name: 'My EC2 Instance'
+                ]
+              }
             }
+          } else if (params.DEPLOYMENT_TYPE == 'VPC') {
+            node {
+              def cidrList = '10.0.0.0/8,10.0.0.0/16,10.0.0.0/28'.split(',')
+              def cidr = input(
+                message: 'Select the required CIDR block:',
+                parameters: [choice(choices: cidrList, description: '')]
+              )
+
+              def vpcId = input(
+                message: 'Enter a VPC ID:',
+                parameters: [string(description: 'The ID of the VPC to create')]
+              )
+
+              awsVpcCreate(
+                cidr: cidr,
+                id: vpcId,
+                tags: [
+                  Name: 'My VPC'
+                ]
+              )
+            }
+          } else {
+            error("Invalid DEPLOYMENT_TYPE: ${params.DEPLOYMENT_TYPE}")
+          }
         }
+      }
     }
-    post {
-        always { 
-            echo 'I will always say Hello again!'
-        }
-        success {
-            echo 'I will say Hello only if job is success'
-        }
-        failure {
-            echo 'I will say Hello only if job is failure'
-        }
-    }
+  }
 }
